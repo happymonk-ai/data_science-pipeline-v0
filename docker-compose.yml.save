@@ -1,0 +1,10 @@
+version: '2'
+services:
+   detection:
+      build:
+         context: .
+         dockerfile: Dockerfile
+      restart: unless-stopped
+      ports:
+         - '6000:6000'
+      sudo apt-get install -y nvidia-container-toolkit
