@@ -772,6 +772,7 @@ async def detect(
         LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
 
     #people Count
+    #Move this to a function, you can define another global variable for total People count and write the values down across all the cameras. 
     sum_count = 0
     for x in person_count:
         sum_count += int(x)
@@ -876,7 +877,7 @@ async def BatchJson(source):
             
 
 async def main():
-    global Device_id , frame_timestamp , Geo_location ,license_plate,avg_Batchcount_person,avg_Batchcount_vehicel , detect_count , track_person , track_vehicle
+    global Device_id , frame_timestamp , geo_location ,license_plate,avg_Batchcount_person,avg_Batchcount_vehicel , detect_count , track_person , track_vehicle
     # nc = await nats.connect(servers=["nats://216.48.189.5:4222"] , reconnect_time_wait=5 ,allow_reconnect=True)
     # nc = await nats.connect(servers=["nats://216.48.181.154:4222"] , error_cb =error_cb ,reconnect_time_wait=2 ,allow_reconnect=True)
     nc = await nats.connect(servers=["nats://216.48.181.154:5222"] , error_cb =error_cb ,reconnect_time_wait=2 ,allow_reconnect=True)
@@ -895,7 +896,7 @@ async def main():
         avg_Batchcount_person =[]
         avg_Batchcount_vehicel = []
         activity_list= []
-        Geo_location = []
+        geo_location = []
         track_person = []
         track_vehicle = []
         boundry_detected_person = []
@@ -973,6 +974,7 @@ async def main():
                 # for item in batch_person_id:
                 #     print(item, "item 937")
 
+                #Move the JSON construct to the a 
                 metapeople ={
                     "type":str(track_type),
                     "track":str(track_person),
@@ -1017,7 +1019,11 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
         loop.run_forever()
     except RuntimeError as e:
+        #use Logger function to log the value
         print("error ", e)
+        #Check for memory error, if memory error, restart the main loop. 
+        #use Logger function to log the print statement over here. 
+        #Also print the device information with the memory information.
         print(torch.cuda.memory_summary(device=None, abbreviated=False), "cuda")
     
     
