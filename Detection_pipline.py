@@ -896,7 +896,7 @@ async def main():
         avg_Batchcount_person =[]
         avg_Batchcount_vehicel = []
         activity_list= []
-        geo_location = []
+        geo_locations = []
         track_person = []
         track_vehicle = []
         boundry_detected_person = []
@@ -937,7 +937,7 @@ async def main():
                 # print("DEVICE_ID :", device_id)
                 frame_timestamp.append(timestamp)
                 # print("TIMESTAMP :", timestamp)
-                Geo_location.append(geo_location)
+                geo_locations.append(geo_location)
                 # print("Geo-location",geo_location)
                 im = Image.fromarray(data1)
                 im.save("Nats_output/output"+str(count)+".jpeg")
@@ -963,9 +963,11 @@ async def main():
                 start = time.time()
                 gc.collect()
                 torch.cuda.empty_cache()
+                #move this to a thread
                 await detect(source=video_name)
                 diff_detect.append(time.time()-start)
                 start = time.time()
+                #move this to a thread
                 await Activity(source=video_name)
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -974,7 +976,7 @@ async def main():
                 # for item in batch_person_id:
                 #     print(item, "item 937")
 
-                #Move the JSON construct to the a 
+                #Move the JSON construct to the a function
                 metapeople ={
                     "type":str(track_type),
                     "track":str(track_person),
