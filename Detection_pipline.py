@@ -138,6 +138,9 @@ track_type = []
 
         
 # #pickledb_whitelist   
+
+# Move this to a function
+#
 db_whitelist = pickledb.load("Weights/known_whitelist.db", True)
 list1 = list(db_whitelist.getall())
 
