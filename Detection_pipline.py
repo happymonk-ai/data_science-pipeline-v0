@@ -9,6 +9,10 @@ import cv2
 import time 
 import gc
 
+#threading
+import multiprocessing as mp
+from multiprocessing import Process
+
 #Import Requiremnt Yolov5
 import os
 import sys
@@ -138,7 +142,7 @@ track_type = []
 
         
 # #pickledb_whitelist   
-db_whitelist = pickledb.load("Weights/known_whitelist.db", True)
+db_whitelist = pickledb.load("Weights/whitelist.db", True)
 list1 = list(db_whitelist.getall())
 
 db_count_whitelist = 0
@@ -173,7 +177,7 @@ for name in list1:
 print(db_count_whitelist, "total whitelist person")
 
 #pickledb_balcklist  
-db_blacklist = pickledb.load("Weights/known_blacklist.db", True)
+db_blacklist = pickledb.load("Weights/blacklist.db", True)
 list1 = list(db_blacklist.getall())
 
 db_count_blacklist = 0
@@ -209,11 +213,13 @@ print(db_count_blacklist, "total blacklist person")
 
 
 # activity
-cfg = get_cfg()
-cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.55  # set threshold for this model
-cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
-predictor = DefaultPredictor(cfg)
+def load_models():
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.55  # set threshold for this model
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    predictor = DefaultPredictor(cfg)
+    return predictor
 count_video = 0 
 
 
@@ -535,6 +541,7 @@ async def detect(
             pass
 
     # Run inference
+    frame_count = 0
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], [0.0, 0.0, 0.0]
     for path, im, im0s, vid_cap, s in dataset:
@@ -587,107 +594,91 @@ async def detect(
                 
                 for c in det[:,-1]:
                     global personDid , count_person ,license_plate
-                    # if count == 10: 
-                    if names[int(c)]=="person":
-                        count_person += 1
-                        if count_person>0:
-                            np_bytes2 = BytesIO()
-                            np.save(np_bytes2, im0, allow_pickle=True)
-                            np_bytes2 = np_bytes2.getvalue()
+                    print(frame_count , "count 590")
+                    if frame_count % 10 == 0: 
+                        if names[int(c)]=="person":
+                            count_person += 1
+                            if count_person>0:
+                                np_bytes2 = BytesIO()
+                                np.save(np_bytes2, im0, allow_pickle=True)
+                                np_bytes2 = np_bytes2.getvalue()
 
-                            image = im0 # if im0 does not work, try with im1
-                            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                                image = im0 # if im0 does not work, try with im1
+                                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-                            # print(MODEL, image ,"model ,image")
-                            locations = face_recognition.face_locations(image, model=MODEL)
-                            # print(locations,"locations 602")
+                                # print(MODEL, image ,"model ,image")
+                                locations = face_recognition.face_locations(image, model=MODEL)
+                                # print(locations,"locations 602")
 
-                            encodings = face_recognition.face_encodings(image, locations)
-                            
-                            print(f', found {len(encodings)} face(s)\n')
-                            
-                            for face_encoding ,face_location in zip(encodings, locations):
-                                    print(np.shape(known_whitelist_faces), "known_whitelist_faces", np.shape(face_encoding),"face_encoding")
-                                    results_whitelist = face_recognition.compare_faces(known_whitelist_faces, face_encoding, TOLERANCE)
-                                    print(results_whitelist, "611")
-                                    if True in results_whitelist:
-                                        did = '00'+ str(known_whitelist_id[results_whitelist.index(True)])
-                                        print(did, "did 613")
-                                        batch_person_id.append(did)
-                                        track_type.append("00")
-                                        if did in face_did_encoding_store.keys():
-                                            face_did_encoding_store[did].append(face_encoding)
-                                        else:
-                                            face_did_encoding_store[did] = list(face_encoding)
-                                    else:
-                                        results_blacklist = face_recognition.compare_faces(known_blacklist_faces, face_encoding, TOLERANCE)
-                                        print(results_blacklist,"621")
-                                        if True in results_blacklist:
-                                            did = '01'+ str(known_blacklist_id[results_blacklist.index(True)])
-                                            print("did 623", did)
+                                encodings = face_recognition.face_encodings(image, locations)
+                                
+                                print(f', found {len(encodings)} face(s)\n')
+                                
+                                for face_encoding ,face_location in zip(encodings, locations):
+                                        print(np.shape(known_whitelist_faces), "known_whitelist_faces", np.shape(face_encoding),"face_encoding")
+                                        results_whitelist = face_recognition.compare_faces(known_whitelist_faces, face_encoding, TOLERANCE)
+                                        print(results_whitelist, "611")
+                                        if True in results_whitelist:
+                                            did = '00'+ str(known_whitelist_id[results_whitelist.index(True)])
+                                            print(did, "did 613")
                                             batch_person_id.append(did)
-                                            track_type.append("01")
+                                            track_type.append("00")
                                             if did in face_did_encoding_store.keys():
                                                 face_did_encoding_store[did].append(face_encoding)
                                             else:
                                                 face_did_encoding_store[did] = list(face_encoding)
                                         else:
-                                            if len(face_did_encoding_store) == 0:
-                                                did = '10'+ str(generate(size =4 ))
-                                                print(did, "did 642")
-                                                track_type.append("10")
+                                            results_blacklist = face_recognition.compare_faces(known_blacklist_faces, face_encoding, TOLERANCE)
+                                            print(results_blacklist,"621")
+                                            if True in results_blacklist:
+                                                did = '01'+ str(known_blacklist_id[results_blacklist.index(True)])
+                                                print("did 623", did)
                                                 batch_person_id.append(did)
-                                                face_did_encoding_store[did] = list(face_encoding)
+                                                track_type.append("01")
+                                                if did in face_did_encoding_store.keys():
+                                                    face_did_encoding_store[did].append(face_encoding)
+                                                else:
+                                                    face_did_encoding_store[did] = list(face_encoding)
                                             else:
-                                                # print(face_did_encoding_store,"face_did_encoding_store")
-                                                for key, value in face_did_encoding_store.items():
-                                                    print(key,"640")
-                                                    if key.startswith('10'):
-                                                        print(type(value),"type vlaue")
-                                                        print(np.shape(np.transpose(np.array(value))), "value 642" ,np.shape(value) ,"value orginal",np.shape(face_encoding), "face_encoding")
-                                                        results_unknown = face_recognition.compare_faces(np.transpose(np.array(value)), face_encoding, TOLERANCE)
-                                                        print(results_unknown,"635")
-                                                        if True in results_unknown:
-                                                            key_list = list(key)
-                                                            key_list[1] = '1'
-                                                            key = str(key_list)
-                                                            print(key, "did 637")
-                                                            batch_person_id.append(key)
-                                                            track_type.append("11")
-                                                            face_did_encoding_store[key].append(face_encoding)
-                                                        else:
-                                                            did = '10'+ str(generate(size=4))
-                                                            print(did, "did 642")
-                                                            batch_person_id.append(did)
-                                                            face_did_encoding_store[did] = list(face_encoding)
-                                    print(batch_person_id, "batch_person_id")
+                                                if len(face_did_encoding_store) == 0:
+                                                    did = '10'+ str(generate(size =4 ))
+                                                    print(did, "did 642")
+                                                    track_type.append("10")
+                                                    batch_person_id.append(did)
+                                                    face_did_encoding_store[did] = list(face_encoding)
+                                                else:
+                                                    # print(face_did_encoding_store,"face_did_encoding_store")
+                                                    for key, value in face_did_encoding_store.items():
+                                                        print(key,"640")
+                                                        if key.startswith('10'):
+                                                            print(type(value),"type vlaue")
+                                                            print(np.shape(np.transpose(np.array(value))), "value 642" ,np.shape(value) ,"value orginal",np.shape(face_encoding), "face_encoding")
+                                                            results_unknown = face_recognition.compare_faces(np.transpose(np.array(value)), face_encoding, TOLERANCE)
+                                                            print(results_unknown,"635")
+                                                            if True in results_unknown:
+                                                                key_list = list(key)
+                                                                key_list[1] = '1'
+                                                                key = str(key_list)
+                                                                print(key, "did 637")
+                                                                batch_person_id.append(key)
+                                                                track_type.append("11")
+                                                                face_did_encoding_store[key].append(face_encoding)
+                                                            else:
+                                                                did = '10'+ str(generate(size=4))
+                                                                print(did, "did 642")
+                                                                batch_person_id.append(did)
+                                                                face_did_encoding_store[did] = list(face_encoding)
+                                                print(batch_person_id, "batch_person_id")
 
-                                
-                                #     if True in results_store:
-                                #         did = did_store[results_store.index(True)]
-                                #         personDid.append(did)
-                                #     elif True in results:
-                                #         match = know_name[results.index(True)]
-                                #         print("Match found: ", match)
-                                #         did = generate(size=24)
-                                #         alertLevel = 0
-                                #         personDid.append(did)
-                                #     else:
-                                #         did = generate(size=24)
-                                #         alertLevel = 1
-                                #         personDid.append(did)
-                                #     face_encoding_store.append(face_encoding)
-                                #     did_store.append(did)
-                                # # print("did store " , did_store)
-                    
-                        elif names[int(c)]=="vehicle":
-                            print("line 581")
-                            # print(im0.shape,"shape")
-                            # crop = Lp_detect(im0)
-                            # print(crop , "crop")
-                            # char,k = segment_characters(crop,cnt)
-                            # t=show_results(char)
-                            # license_plate.append(str(t))
+                        
+                            elif names[int(c)]=="vehicle":
+                                print("line 581")
+                                # print(im0.shape,"shape")
+                                # crop = Lp_detect(im0)
+                                # print(crop , "crop")
+                                # char,k = segment_characters(crop,cnt)
+                                # t=show_results(char)
+                                # license_plate.append(str(t))
                         
                 
                         
@@ -735,6 +726,7 @@ async def detect(
                         #     annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                    frame_count += 1
                     
                                      
             # Save results (image with detections)
@@ -805,8 +797,7 @@ async def detect(
 
         
         
-async def error_cb(e):
-    print("There was an Error:{e}", e)
+
 
 async def BatchJson(source):
     global activity_list ,activity_list_box , person_count
@@ -862,20 +853,33 @@ async def BatchJson(source):
     return activity_list
 
             
+# async def error_cb(e):
+#     print("There was an Error:{e}", e)
+#     if type(e) is nats.aio.errors.ErrSlowConsumer:
+#         print("Slow consumer error, unsubscribing from handling further messages...")
+#         await nc.unsubscribe(e.sid)
+        
+    
+    
 
 async def main():
-    global Device_id , frame_timestamp , Geo_location ,license_plate,avg_Batchcount_person,avg_Batchcount_vehicel , detect_count , track_person , track_vehicle
+    global Device_id , frame_timestamp , geo_locations ,license_plate,avg_Batchcount_person,avg_Batchcount_vehicel , detect_count , track_person , track_vehicle
+    async def error_cb(e):
+        if type(e) is nats.errors.SlowConsumerError:
+            print("Slow consumer error, unsubscribing from handling further messages..." , e.subject,"subject")
+   
     # nc = await nats.connect(servers=["nats://216.48.189.5:4222"] , reconnect_time_wait=5 ,allow_reconnect=True)
     # nc = await nats.connect(servers=["nats://216.48.181.154:4222"] , error_cb =error_cb ,reconnect_time_wait=2 ,allow_reconnect=True)
-    nc = await nats.connect(servers=["nats://216.48.181.154:5222"] , error_cb =error_cb ,reconnect_time_wait=2 ,allow_reconnect=True)
+    nc = await nats.connect(servers=["nats://216.48.181.154:5222"] , error_cb =error_cb , reconnect_time_wait= 5 ,allow_reconnect=True)
     # Create JetStream context.
     js = nc.jetstream()
     # psub = await js.pull_subscribe("Testing.video.frames1","psub", stream="Testing_stream1")
     psub = await js.pull_subscribe("stream.*.frame","psub", stream="device_stream")
+    # psub = await js.pull_subscribe("mp4.*.frame","psub", stream="device_stream_*")
     batch_size = 50
     while True:
         count = 0
-        BatchId = generate(size=4)
+        BatchId = generate(size=32)
         Device_id = []
         detect_count = []
         frame_timestamp = []
@@ -883,7 +887,7 @@ async def main():
         avg_Batchcount_person =[]
         avg_Batchcount_vehicel = []
         activity_list= []
-        Geo_location = []
+        geo_locations = []
         track_person = []
         track_vehicle = []
         boundry_detected_person = []
@@ -921,11 +925,8 @@ async def main():
                 resized = cv2.resize(arr, (720 ,720))
                 data1 = resized
                 Device_id.append(device_id)
-                # print("DEVICE_ID :", device_id)
                 frame_timestamp.append(timestamp)
-                # print("TIMESTAMP :", timestamp)
-                Geo_location.append(geo_location)
-                # print("Geo-location",geo_location)
+                geo_locations.append(geo_location)
                 im = Image.fromarray(data1)
                 im.save("Nats_output/output"+str(count)+".jpeg")
                 # print("image saved")
@@ -950,16 +951,18 @@ async def main():
                 start = time.time()
                 gc.collect()
                 torch.cuda.empty_cache()
-                await detect(source=video_name)
+                t1 = Process (target = await detect(source=video_name))
+                t1.start()
                 diff_detect.append(time.time()-start)
                 start = time.time()
-                await Activity(source=video_name)
+                t2 = Process (target = await Activity(source=video_name))
+                t2.start()
+                t1.join()
+                t2.join()
                 gc.collect()
                 torch.cuda.empty_cache()
                 diff_activity.append(time.time()-start)
                 activity_list = await BatchJson(source="classes.txt")
-                # for item in batch_person_id:
-                #     print(item, "item 937")
 
                 metapeople ={
                     "type":str(track_type),
@@ -987,21 +990,25 @@ async def main():
                 }
                 
                 primary = { "deviceid":str(Device_id[-1]),
-                            "batchid":str(BatchId[-1]), 
+                            "batchid":str(BatchId), 
                             "timestamp":str(frame_timestamp[-1]), 
                             "geo":str(Geo_location[-1]),
                             "metaData": metaBatch}
                 print(primary)
                 JSONEncoder = json.dumps(primary)
                 json_encoded = JSONEncoder.encode()
-                subjectactivity = "model.activity"
-                await nc.publish(subjectactivity, json_encoded)
+                Subject = "model.activity_v1"
+                Stream_name = "Testing_json"
+                await js.add_stream(name= Stream_name, subjects=[Subject])
+                ack = await js.publish(Subject, json_encoded)
+                print(f'Ack: stream={ack.stream}, sequence={ack.seq}')
                 print("Activity is getting published")
                 
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     try :
+        loop.run_until_complete(load_models())
         loop.run_until_complete(main())
         loop.run_forever()
     except RuntimeError as e:
