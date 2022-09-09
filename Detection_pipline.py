@@ -140,11 +140,13 @@ track_type = []
 # #pickledb_whitelist   
 
 # Move this to a function
-#
+# And Call the code in the main before the other code starts. 
+# You can thread the part. 
 db_whitelist = pickledb.load("Weights/known_whitelist.db", True)
 list1 = list(db_whitelist.getall())
 
 db_count_whitelist = 0
+#This should be made as a function and called. its a repeat code 
 for name in list1:    
         # Next we load every file of faces of known person
         re_image = db_whitelist.get(name)
@@ -175,10 +177,13 @@ for name in list1:
         db_count_whitelist += 1
 print(db_count_whitelist, "total whitelist person")
 
+
+#Combine this with the above function and call it once. 
 #pickledb_balcklist  
 db_blacklist = pickledb.load("Weights/known_blacklist.db", True)
 list1 = list(db_blacklist.getall())
 
+#Combine this with the above function. 
 db_count_blacklist = 0
 for name in list1:    
         # Next we load every file of faces of known person
@@ -210,14 +215,17 @@ for name in list1:
         db_count_blacklist += 1
 print(db_count_blacklist, "total blacklist person")
 
+# Move this to function and call the function
 
-# activity
-cfg = get_cfg()
-cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.55  # set threshold for this model
-cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
-predictor = DefaultPredictor(cfg)
-count_video = 0 
+def load_models():
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.55  # set threshold for this model
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    predictor = DefaultPredictor(cfg)
+    count_video = 0 
+    return
+
 
 
 async def get_person_bboxes(inp_img, predictor):
@@ -284,6 +292,7 @@ async def ava_inference_transform(
     
     return clip, torch.from_numpy(boxes), ori_boxes
 
+#Move the function name from Activity to acitivity_inference
 async def Activity(source):
             # Create an id to label name mapping
             global count_video            
@@ -807,7 +816,7 @@ async def detect(
         strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
 
         
-        
+#Move this to Logger function from AsyncIO        
 async def error_cb(e):
     print("There was an Error:{e}", e)
 
@@ -1001,7 +1010,7 @@ async def main():
                 await nc.publish(subjectactivity, json_encoded)
                 print("Activity is getting published")
                 
-
+# Do all the preloading here. 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     try :
