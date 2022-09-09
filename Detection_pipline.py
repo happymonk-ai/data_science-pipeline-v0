@@ -143,9 +143,12 @@ track_type = []
         
 # #pickledb_whitelist   
 db_whitelist = pickledb.load("Weights/whitelist.db", True)
+db_whitelist = pickledb.load("Weights/known_whitelist.db", True)
+
 list1 = list(db_whitelist.getall())
 
 db_count_whitelist = 0
+#This should be made as a function and called. its a repeat code 
 for name in list1:    
         # Next we load every file of faces of known person
         re_image = db_whitelist.get(name)
@@ -176,10 +179,13 @@ for name in list1:
         db_count_whitelist += 1
 print(db_count_whitelist, "total whitelist person")
 
+
+#Combine this with the above function and call it once. 
 #pickledb_balcklist  
 db_blacklist = pickledb.load("Weights/blacklist.db", True)
 list1 = list(db_blacklist.getall())
 
+#Combine this with the above function. 
 db_count_blacklist = 0
 for name in list1:    
         # Next we load every file of faces of known person
@@ -211,6 +217,17 @@ for name in list1:
         db_count_blacklist += 1
 print(db_count_blacklist, "total blacklist person")
 
+# Move this to function and call the function
+
+def load_models():
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.55  # set threshold for this model
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    predictor = DefaultPredictor(cfg)
+    count_video = 0 
+    return
+
 
 # activity
 def load_models():
@@ -221,6 +238,7 @@ def load_models():
     predictor = DefaultPredictor(cfg)
     return predictor
 count_video = 0 
+
 
 
 async def get_person_bboxes(inp_img, predictor):
@@ -287,6 +305,7 @@ async def ava_inference_transform(
     
     return clip, torch.from_numpy(boxes), ori_boxes
 
+#Move the function name from Activity to acitivity_inference
 async def Activity(source):
             # Create an id to label name mapping
             global count_video            
@@ -752,6 +771,7 @@ async def detect(
         LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
 
     #people Count
+    #Move this to a function, you can define another global variable for total People count and write the values down across all the cameras. 
     sum_count = 0
     for x in person_count:
         sum_count += int(x)
@@ -796,7 +816,9 @@ async def detect(
         strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
 
         
-        
+       
+async def error_cb(e):
+    print("There was an Error:{e}", e)
 
 
 async def BatchJson(source):
@@ -868,6 +890,9 @@ async def main():
         if type(e) is nats.errors.SlowConsumerError:
             print("Slow consumer error, unsubscribing from handling further messages..." , e.subject,"subject")
    
+
+    global Device_id , frame_timestamp , geo_location ,license_plate,avg_Batchcount_person,avg_Batchcount_vehicel , detect_count , track_person , track_vehicle
+
     # nc = await nats.connect(servers=["nats://216.48.189.5:4222"] , reconnect_time_wait=5 ,allow_reconnect=True)
     # nc = await nats.connect(servers=["nats://216.48.181.154:4222"] , error_cb =error_cb ,reconnect_time_wait=2 ,allow_reconnect=True)
     nc = await nats.connect(servers=["nats://216.48.181.154:5222"] , error_cb =error_cb , reconnect_time_wait= 5 ,allow_reconnect=True)
@@ -926,7 +951,13 @@ async def main():
                 data1 = resized
                 Device_id.append(device_id)
                 frame_timestamp.append(timestamp)
+
                 geo_locations.append(geo_location)
+
+                # print("TIMESTAMP :", timestamp)
+                geo_locations.append(geo_location)
+                # print("Geo-location",geo_location)
+
                 im = Image.fromarray(data1)
                 im.save("Nats_output/output"+str(count)+".jpeg")
                 # print("image saved")
@@ -951,6 +982,7 @@ async def main():
                 start = time.time()
                 gc.collect()
                 torch.cuda.empty_cache()
+
                 t1 = Process (target = await detect(source=video_name))
                 t1.start()
                 diff_detect.append(time.time()-start)
@@ -959,11 +991,20 @@ async def main():
                 t2.start()
                 t1.join()
                 t2.join()
+
+                #move this to a thread
+                await detect(source=video_name)
+                diff_detect.append(time.time()-start)
+                start = time.time()
+                #move this to a thread
+                await Activity(source=video_name)
+
                 gc.collect()
                 torch.cuda.empty_cache()
                 diff_activity.append(time.time()-start)
                 activity_list = await BatchJson(source="classes.txt")
 
+                #Move the JSON construct to the a function
                 metapeople ={
                     "type":str(track_type),
                     "track":str(track_person),
@@ -1004,7 +1045,7 @@ async def main():
                 print(f'Ack: stream={ack.stream}, sequence={ack.seq}')
                 print("Activity is getting published")
                 
-
+# Do all the preloading here. 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     try :
@@ -1012,7 +1053,11 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
         loop.run_forever()
     except RuntimeError as e:
+        #use Logger function to log the value
         print("error ", e)
+        #Check for memory error, if memory error, restart the main loop. 
+        #use Logger function to log the print statement over here. 
+        #Also print the device information with the memory information.
         print(torch.cuda.memory_summary(device=None, abbreviated=False), "cuda")
     
     
